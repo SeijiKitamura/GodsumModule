@@ -1,5 +1,5 @@
 # RuikeiModule
-Railsのmodel用moduleです。指定したDB列の合計（累計額）を簡単に算出することができます。
+ActiveRecord用moduleです。指定したDB列の合計（累計額）を簡単に算出することができます。
 
 ## インストール
 app/model/concernsにruikei_modules.rbを配置してください。
@@ -312,9 +312,9 @@ from (
      end as hiduke
   from sales
   where
-    sales.saledate between '前年開始日' and '前年終了日' and store_id in (Storeのid) 
+    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
     or
-    sales.saledate between '今年開始日' and '今年終了日' and store_id in (Storeのid) 
+    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
   group by
      sales.store_id
     ,sales.sale_month
@@ -339,9 +339,9 @@ inner join (
      end as hiduke
   from sales
   where
-    sales.saledate between '前年開始日' and '前年終了日' and store_id in (Storeのid) 
+    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
     or
-    sales.saledate between '今年開始日' and '今年終了日' and store_id in (Storeのid) 
+    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
   group by
      sales.store_id
     ,sales.sale_month
@@ -387,9 +387,9 @@ order by
      end as hiduke
   from sales
   where
-    sales.saledate between '前年開始日' and '前年終了日' and store_id in (Storeのid) 
+    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
     or
-    sales.saledate between '今年開始日' and '今年終了日' and store_id in (Storeのid) 
+    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
   group by
      sales.store_id
   1),sales.sale_month
@@ -458,7 +458,7 @@ t2テーブルとinner joinして累計値を求める際、今年の日付が�
 
 ### t2テーブルの説明
 t2テーブルは累計を求めるためのテーブルで内容はt1と同じになっています。
-このテーブルで重要な点は以下のinner join。
+このテーブルで重要な点は以下のinner joinです。
 ```
 t2 on
       t1.store_id = t2.store_id
