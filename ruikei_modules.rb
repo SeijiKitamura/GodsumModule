@@ -8,9 +8,7 @@ module RuikeiModules
     SALE_DAY       = "sale_day"
     SALE_CWEEK     = "sale_cweek"
     SALE_WDAY      = "sale_wday"
-    SUM_COLUMNS    = %w[saleitem saleamt disitem disamt
-                        dispitem dispamt customer cost
-                        price stock].freeze
+    SUM_COLUMNS    = %w[saleitem].freeze
     @group_type = ""
     @option_group_columns  = []
     @option_order_columns  = []
