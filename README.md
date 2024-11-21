@@ -2,7 +2,7 @@
 Railsのmodel用moduleです。指定したDB列の合計（累計額）を簡単に算出することができます。
 
 ## インストール
-app/model/concernsにRuikeiModules.rbを配置してください。
+app/model/concernsにruikei_modules.rbを配置してください。
 その後、データを管理しているmodelに以下のコードを記述します。
 ```
 class Sale < Activerecord
@@ -24,7 +24,7 @@ assembleを呼び出す際に必要な引数は以下の通りです。
 |★| 第1引数 | model_ids | 配列 | 不可 | 売上集計したい親Modelのidを入れます。|
 |★| 第2引数 | kikan | 配列 | 不可 | 前年開始日、前年終了日、今年開始日、今年終了日の順｜
 | | 第3引数 | group_type | 配列 | 可 | 集計の基準となる列名を配列で指定します。(省略した場合は:days)|
-| | 第4引数 | option_order_columns | 可 | 配列 | 並び変えとなる列名を配列で指定します|
+| | 第4引数 | option_order_columns | 配列 | 可 | 並び変えとなる列名を配列で指定します|
 
 第3引数について
 | 値 | 集計列 | 説明 |
@@ -197,6 +197,7 @@ ruikei_modules.rbにある以下の定数をDBの列名に合わせて変更す�
 || ・・・ | ・・・ | ・・・ |
 |★| created_at| datetime| |
 |★| updated_at| datetime| |
+
 ★-> 必須列
 
 ### Sale（子テーブル)
@@ -216,6 +217,7 @@ ruikei_modules.rbにある以下の定数をDBの列名に合わせて変更す�
 |★| sale_wday | integer | 曜日  |
 |★| created_at| datetime| |
 |★| updated_at| datetime| |
+
 ★-> 必須列
 
 ## Modelについて
