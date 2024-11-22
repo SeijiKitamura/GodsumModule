@@ -1,34 +1,37 @@
-module RuikeiModules
+module GodsumModules
   extend ActiveSupport::Concern
   module ClassMethods
     PARENT_COLUMNS = %w[number name].freeze
-    SALEDATE       = "saledate"
-    SALE_YEAR      = "sale_year"
-    SALE_MONTH     = "sale_month"
-    SALE_DAY       = "sale_day"
-    SALE_CWEEK     = "sale_cweek"
-    SALE_WDAY      = "sale_wday"
-    SUM_COLUMNS    = %w[saleitem].freeze
+    SALEDATE       = "saledate".freeze
+    SALE_YEAR      = "sale_year".freeze
+    SALE_MONTH     = "sale_month".freeze
+    SALE_DAY       = "sale_day".freeze
+    SALE_CWEEK     = "sale_cweek".freeze
+    SALE_WDAY      = "sale_wday".freeze
+    SUM_COLUMNS    = %w[saleitem saleamt disitem disamt
+                        dispitem dispamt customer cost
+                        price stock].freeze
     @group_type = ""
     @option_group_columns  = []
     @option_order_columns  = []
     @model_ids      = []
     @kikan          = []
 
-    def assemble(model_ids = [], kikan = [], group_type = :days, option_order_columns = [])
+    def godsum(model_ids = [], kikan = [], group_type = :days, option_order_columns = [])
       # 引数をクラス変数にセット
       @model_ids = model_ids
       @kikan = kikan
       @group_type = group_type
-      @option_group_columns = if group_type == :years
+      @option_group_columns = case group_type
+                              when :years
                                 %W[#{SALE_YEAR}]
-                              elsif group_type == :months
+                              when :months
                                 %W[#{SALE_MONTH}]
-                              elsif group_type == :weeks
+                              when :weeks
                                 %W[#{SALE_CWEEK}]
-                              elsif group_type == :days
+                              when :days
                                 %W[#{SALE_MONTH} #{SALE_DAY}]
-                              elsif group_type == :wdays
+                              when :wdays
                                 %W[#{SALE_CWEEK} #{SALE_WDAY}]
                               end
       @option_group_columns += %W[#{parent_table}_id]
@@ -42,7 +45,57 @@ module RuikeiModules
         .order(last_order_sql)
     end
 
+    # startdayからlastdayまでの期間売上を表示する
+    def godsum_days(startday, lastday, *model_ids)
+      model_ids = model_ids.flatten
+      span = [startday - 1.year, lastday - 1.year, startday, lastday]
+      godsum(model_ids, span, :days)
+    end
+
+    # 週別売上
+    # ---------------------------------------------- #
+    #                *** 警告 ***                    #
+    # (前年同週が存在しない場合、正しい値が返らない) #
+    # ---------------------------------------------- #
+    def godsum_weeks(startday, lastday, *model_ids)
+      model_ids = model_ids.flatten
+
+      z_startday = if get_z_startday(startday)
+                     get_z_startday(startday) + startday.wday.day
+                   else
+                     Time.zone.local(startday - 1.year, 12, 25)
+                   end
+      z_lastday = z_startday + (lastday - startday)
+      godsum(model_ids,[z_startday, z_lastday, startday, lastday], :weeks)
+    end
+
+    # 月別売上
+    def godsum_months(startday, lastday, *model_ids)
+      model_ids = model_ids.flatten
+      z_startday = startday - 1.year
+      z_lastday = lastday - 1.year
+      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:months)
+    end
+
+    # 年別売上
+    def godsum_years(startday, lastday, *model_ids)
+      model_ids = model_ids.flatten
+      z_startday = startday - 1.year
+      z_lastday = lastday - 1.year
+      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:years)
+    end
+
     private
+
+    # 12/26-31の場合、nilが返る可能性がある
+    def get_z_startday(saledate)
+      z_startday = nil
+      ((saledate - 1.year).beginning_of_year..(saledate - 1.year).end_of_year).each do |d|
+        z_startday = d if d.cweek == saledate.cweek
+      end
+      z_startday
+    end
+
 
     # 親テーブル名(定数的な扱い)
     def parent_table
@@ -58,33 +111,33 @@ module RuikeiModules
     def from_sql
       %W[(#{create_inner_table}) as t1].join(" ")
     end
-    
+
     # INNER JOIN句のSQL文を発行。
     def inner_join_sql
-      %W[inner join (#{create_inner_table}) as t2 
-         on #{set_base_inner_join_columns.join(" ")}
-         #{set_last_inner_join_columns.join(" ")}].join(" ")
+      %W[inner join (#{create_inner_table}) as t2
+         on #{set_base_inner_join_columns.join(' ')}
+         #{set_last_inner_join_columns.join(' ')}].join(' ')
     end
 
     # GROUP句のSQL文を発行。
     def last_group_sql
-      set_last_group_columns.join(",")
+      set_last_group_columns.join(',')
     end
 
     # ORDER句のSQL文を発行。
     def last_order_sql
-      set_last_order_columns.join(",")
+      set_last_order_columns.join(',')
     end
 
     # 各種メソッドを使用してt1とt2のSQLを生成
     def create_inner_table
       %W[select
-           #{set_base_select_columns.join(",")}
+         #{set_base_select_columns.join(',')}
          from #{table_name}
          where
-           #{set_base_where_columns.join(" ")}
+         #{set_base_where_columns.join(' ')}
          group by
-           #{set_base_group_columns.join(",")}].join(" ")
+         #{set_base_group_columns.join(',')}].join(' ')
     end
 
     # t1とt2のselect句を生成
@@ -102,39 +155,41 @@ module RuikeiModules
 
     # t1とt2のinner join用の列を作成
     def set_base_hiduke
-      if @group_type == :wdays
+      case @group_type
+      when :wdays
         %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-            (#{table_name}.#{SALE_YEAR} + 1) * 1000 + #{table_name}.#{SALE_CWEEK} * 100 + #{table_name}.#{SALE_WDAY} 
+           (#{table_name}.#{SALE_YEAR} + 1) * 1000 + #{table_name}.#{SALE_CWEEK} * 100 + #{table_name}.#{SALE_WDAY}
            else
-             (#{table_name}.#{SALE_YEAR}) * 1000 + #{table_name}.#{SALE_CWEEK} * 100 + #{table_name}.#{SALE_WDAY}
+           (#{table_name}.#{SALE_YEAR}) * 1000 + #{table_name}.#{SALE_CWEEK} * 100 + #{table_name}.#{SALE_WDAY}
            end]
 
-      elsif @group_type == :days
+      when :days
         %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-            (#{table_name}.#{SALE_YEAR} + 1) * 1000 + #{table_name}.#{SALE_MONTH} * 100 + #{table_name}.#{SALE_DAY} 
+           (#{table_name}.#{SALE_YEAR} + 1) * 1000 + #{table_name}.#{SALE_MONTH} * 100 + #{table_name}.#{SALE_DAY}
            else
-             (#{table_name}.#{SALE_YEAR}) * 1000 + #{table_name}.#{SALE_MONTH} * 100 + #{table_name}.#{SALE_DAY}
+           (#{table_name}.#{SALE_YEAR}) * 1000 + #{table_name}.#{SALE_MONTH} * 100 + #{table_name}.#{SALE_DAY}
            end]
-      elsif @group_type == :weeks
+      when :weeks
         %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-            (#{table_name}.#{SALE_YEAR} + 1) * 100 + #{table_name}.#{SALE_CWEEK}
+           (#{table_name}.#{SALE_YEAR} + 1) * 100 + #{table_name}.#{SALE_CWEEK}
            else
-             (#{table_name}.#{SALE_YEAR}) * 100 + #{table_name}.#{SALE_CWEEK}
+           (#{table_name}.#{SALE_YEAR}) * 100 + #{table_name}.#{SALE_CWEEK}
            end]
-      elsif @group_type == :months
+      when :months
         %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-            (#{table_name}.#{SALE_YEAR} + 1) * 100 + #{table_name}.#{SALE_MONTH}
+           (#{table_name}.#{SALE_YEAR} + 1) * 100 + #{table_name}.#{SALE_MONTH}
            else
-             (#{table_name}.#{SALE_YEAR} * 100 + #{table_name}.#{SALE_MONTH})
+           (#{table_name}.#{SALE_YEAR} * 100 + #{table_name}.#{SALE_MONTH})
            end]
-      elsif @group_type == :years
+      when :years
         %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-            #{table_name}.#{SALE_YEAR} + 1
+           #{table_name}.#{SALE_YEAR} + 1
            else
-            #{table_name}.#{SALE_YEAR}
+           #{table_name}.#{SALE_YEAR}
            end]
       end
     end
+
     # t1とt2のwhere句を生成
     def set_base_where_columns
       %W[#{table_name}.#{SALEDATE}
@@ -185,7 +240,7 @@ module RuikeiModules
       end.flatten
       ary1 + ary2 + ary3 + ary4
     end
- 
+
     # t1,t2,t3を併せたテーブルのgroup句
     def set_last_group_columns
       ary1 = PARENT_COLUMNS.map do |column|
@@ -207,4 +262,3 @@ module RuikeiModules
     end
   end
 end
-
