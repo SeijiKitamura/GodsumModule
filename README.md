@@ -397,10 +397,10 @@ Sale(子テーブル）に以下のデータが入っています。
 
 store\_id、月、日でグループ化したsaleamtが集計されます。
 
-|store\_id| sale\_month | sale\_day | saleamt | z\_saleamt | r\_saleamt | r\_z\_saleamt |
+|store\_id| sale\_month | sale\_day | saleamt | r\_saleamt | z\_saleamt | r\_z\_saleamt |
 |---|---|---|---|---|---|---|
-| 1 | 5 | 1 | 400 | 400 | 100 | 100 |
-| 1 | 5 | 2 | 500 | 900 | 200 | 300 |
+| 1 | 5 | 1 | 400 | 400  | 100 | 100 |
+| 1 | 5 | 2 | 500 | 900  | 200 | 300 |
 | 1 | 5 | 3 | 600 | 1500 | 300 | 600 |
 
 **例2 全店舗の売上合計を求める**
