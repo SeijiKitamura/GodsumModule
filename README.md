@@ -737,7 +737,6 @@ order by
 
 | group\_type | 列 |
 | --- | --- |
-| :years | sale\_year |
 | :months | sale\_month |
 | :weeks | sale\_week |
 | :days | sale\_month sale\_day|
@@ -772,7 +771,6 @@ t2テーブルとleft outer joinして累計値を求める際、今年の日付
 またgroup\_typeによってcase内の計算式が以下のように変化します。
 | group\_type | 計算式 |
 | --- | --- |
-| :years | (sales.sale\_year + 1) |
 | :months | (sales.sale\_year + 1) * 1000 + sales.month * 100|
 | :weeks | (sales.sale\_year + 1) * 100 + sales.week|
 | :days | (sales.sale\_year + 1) * 1000 + sales.month * 100 + sales.sale\_day|
@@ -1021,26 +1019,26 @@ order by
   t7.number
   ,t5.sale_year;
 ```
-1) t1テーブル
+### 1) t1テーブル
 model\_id、年ごとに集計をします。
 
-2) t2テーブル
+### 2) t2テーブル
 model\_id、年ごとに集計をします。
 同時にhiduke(sale\_year + 1)列を追加しています。
 
-3) t5テーブル
+### 3) t5テーブル
 t1とt2をleft outer joinします。
 joinする際、t1.sale\_year = t2.hiduke(sale\_year + 1)と
 することでt1は今年の売上、t2は前年売上になります。
 
-4) t6テーブル
+### 4) t6テーブル
 累計用にt5と同じテーブルを用意しt5とleft outer joinします。
 その際、t5.sale\_year >= t6.sale\_year とすることで
 今年よりも小さい行を積み重ねています。
 
-5) t7テーブル
+### 5) t7テーブル
 マスタテーブルを用意しt5とinner joinします。
 
-6) 仕上げ
+### 6) 仕上げ
 t5から今年と前年の売上、t6から累計用のデータを選択しsumします。
 t5の列をgroup byして完成です。
