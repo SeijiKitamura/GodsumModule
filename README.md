@@ -485,7 +485,7 @@ store\_id、週でグループ化したsaleamtが集計されます。
 
 ```ruby
 @store = Store.all
-@sales = Sale.godsum\_weeks("2024-05-01", "2024-05-08", @stores.ids)
+@sales = Sale.godsum_weeks("2024-05-01", "2024-05-08", @stores.ids)
 ```
 
 **結果:** 
@@ -563,8 +563,8 @@ r\_列を使用することができます。
   <tr>
     <td>合計:</td>
     <td></td>
-    <%= last_sale.r_saleamt %></td>
-  </td>
+    <td><%= last_sale.r_saleamt %></td>
+  </tr>
 <% end %>
 ```
 
@@ -1068,8 +1068,9 @@ joinする際、t1.sale\_year = t2.hiduke(sale\_year + 1)と
 今年よりも小さい行を積み重ねています。
 
 ## 5) t7テーブル
-マスタテーブルを用意しt5とinner joinします。
+マスタテーブルをt5とinner joinします。
 
 ## 6) 仕上げ
 t5から今年と前年の売上、t6から累計用のデータを選択しsumします。
-t5の列をgroup byして完成です。
+t7から属性値を選択しています。
+t5,t7の列をgroup byして完成です。
