@@ -568,7 +568,7 @@ r\_列を使用することができます。
 ```
 
 ## 設定
-godsum\_modules.rbにある以下の定数をDBの列名に合わせて変更することができます。
+godsum\_modules.rbにある定数の値をDBの列名に合わせて変更することができます。
 | 定数名 | 説明 | デフォルト |
 |---|---|---|
 | PARENT\_COLUMNS | 親テーブルの表示したい列名を配列で登録します。| number|
@@ -638,7 +638,7 @@ SQLを生成するためのメソッドになっています。
 | sale | t2 | 累計用。t1と同じ構成 |
 | store | t3 | マスタテーブル |
 
-日別売上を選択した場合実行されるSQLは以下の通りです。
+:daysを選択した場合実行されるSQLは以下の通りです。
 
 ```sql
 select
@@ -979,7 +979,7 @@ from (
   /* t1 t2 inner join start */
       t1.sale_year = t2.hiduke
   and t1.sale_id = t2.sale_id
-  /* t1 t2 inner join day */
+  /* t1 t2 inner join end */
   /* t5 end */
 ) as t5
  left outer join (
@@ -1024,15 +1024,17 @@ from (
    /* t1 t2 inner join start */
        t1.sale_year = t2.hiduke
    and t1.sale_id = t2.sale_id
-   /* t1 t2 inner join day */
+   /* t1 t2 inner join end */
    /* t6 end */
 ) as t6 on
   /* t5 t6 left outer join start */
       t5.sale_year >= t6.sale_year
   and t5.sale_id = t6.sale_id
   /* t5 t6 inner join end */
+/* t7 inner join start */
 inner join stores as t7 on
   t5.sale_id = t7.id
+/* t7 inner join end */
 group by
   /* last_group */
    t5.sale_year
@@ -1043,7 +1045,7 @@ group by
   ,t7.name
 order by
   /* last_order */
-  t7.number
+   t7.number
   ,t5.sale_year;
 ```
 
