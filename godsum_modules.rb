@@ -1,27 +1,28 @@
 module GodsumModules
   extend ActiveSupport::Concern
   module ClassMethods
-    PARENT_COLUMNS = %w[number name].freeze
+    PARENT_COLUMNS = %w[number].freeze
     SALEDATE       = "saledate".freeze
     SALE_YEAR      = "sale_year".freeze
     SALE_MONTH     = "sale_month".freeze
     SALE_DAY       = "sale_day".freeze
     SALE_CWEEK     = "sale_cweek".freeze
     SALE_WDAY      = "sale_wday".freeze
-    SUM_COLUMNS    = %w[saleitem saleamt disitem disamt
-                        dispitem dispamt customer cost
-                        price stock].freeze
+    SUM_COLUMNS    = %w[saleamt]
     @group_type = ""
+    @total = false
     @option_group_columns  = []
     @option_order_columns  = []
     @model_ids      = []
     @kikan          = []
 
-    def godsum(model_ids = [], kikan = [], group_type = :days, option_order_columns = [])
+    # ベースとなるメソッド
+    def godsum(model_ids = [], kikan = [], group_type = :days, total = false, option_order_columns = [])
       # 引数をクラス変数にセット
       @model_ids = model_ids
-      @kikan = kikan
+      @kikan = kikan.map(&:to_date)
       @group_type = group_type
+      @total = !!total
       @option_group_columns = case group_type
                               when :years
                                 %W[#{SALE_YEAR}]
@@ -34,22 +35,24 @@ module GodsumModules
                               when :wdays
                                 %W[#{SALE_CWEEK} #{SALE_WDAY}]
                               end
-      @option_group_columns += %W[#{parent_table}_id]
+      @option_group_columns += %W[#{parent_table}_id] if @total == false
       @option_order_columns = option_order_columns.presence || @option_group_columns
 
       # SQL実行
       select(select_sql)
         .from(from_sql)
-        .joins(inner_join_sql)
+        .joins(left_outer_join_sql)
         .group(last_group_sql)
         .order(last_order_sql)
     end
 
-    # startdayからlastdayまでの期間売上を表示する
-    def godsum_days(startday, lastday, *model_ids)
+    # 日別売上
+    def godsum_days(startday, lastday, *model_ids, **options)
       model_ids = model_ids.flatten
+      startday = startday.to_date
+      lastday = lastday.to_date
       span = [startday - 1.year, lastday - 1.year, startday, lastday]
-      godsum(model_ids, span, :days)
+      godsum(model_ids, span, :days, options[:total])
     end
 
     # 週別売上
@@ -57,32 +60,42 @@ module GodsumModules
     #                *** 警告 ***                    #
     # (前年同週が存在しない場合、正しい値が返らない) #
     # ---------------------------------------------- #
-    def godsum_weeks(startday, lastday, *model_ids)
+    def godsum_weeks(startday, lastday, *model_ids, **options)
       model_ids = model_ids.flatten
-
+      startday = startday.to_date
+      lastday = lastday.to_date
       z_startday = if get_z_startday(startday)
                      get_z_startday(startday) + startday.wday.day
                    else
                      Time.zone.local(startday - 1.year, 12, 25)
                    end
       z_lastday = z_startday + (lastday - startday)
-      godsum(model_ids,[z_startday, z_lastday, startday, lastday], :weeks)
+      godsum(model_ids,[z_startday, z_lastday, startday, lastday], :weeks, options[:total])
     end
 
     # 月別売上
-    def godsum_months(startday, lastday, *model_ids)
+    def godsum_months(startday, lastday, *model_ids, **options)
       model_ids = model_ids.flatten
+      startday = startday.to_date
+      lastday = lastday.to_date
       z_startday = startday - 1.year
       z_lastday = lastday - 1.year
-      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:months)
+      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:months, options[:total])
     end
 
     # 年別売上
-    def godsum_years(startday, lastday, *model_ids)
-      model_ids = model_ids.flatten
-      z_startday = startday - 1.year
-      z_lastday = lastday - 1.year
-      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:years)
+    # 年別はロジックが変わるためgodsumメソッドを使用しない
+    def godsum_years(startday, lastday, *model_ids, **options)
+      # 引数をクラス変数にセット
+      @model_ids = model_ids
+      @kikan = %W[#{startday} #{lastday}].map(&:to_date)
+      @total = options[:total].presence || false
+      @option_group_columns = %W[#{SALE_YEAR}]
+      select(select_year_sql)
+        .from(from_year_sql)
+        .joins(left_outer_year_sql)
+        .group(group_year_sql)
+        .order(order_year_sql)
     end
 
     private
@@ -96,7 +109,6 @@ module GodsumModules
       z_startday
     end
 
-
     # 親テーブル名(定数的な扱い)
     def parent_table
       reflect_on_all_associations.first.name.to_s
@@ -109,14 +121,14 @@ module GodsumModules
 
     # FROM句のSQL文を発行。
     def from_sql
-      %W[(#{create_inner_table}) as t1].join(" ")
+      %W[(#{create_left_outer_table}) as t1].join(" ")
     end
 
-    # INNER JOIN句のSQL文を発行。
-    def inner_join_sql
-      %W[inner join (#{create_inner_table}) as t2
-         on #{set_base_inner_join_columns.join(' ')}
-         #{set_last_inner_join_columns.join(' ')}].join(' ')
+    # LEFT OUTER JOIN句のSQL文を発行。
+    def left_outer_join_sql
+      %W[left outer join (#{create_left_outer_table}) as t2
+         on #{set_base_left_outer_join_columns.join(' ')}
+         #{set_last_left_outer_join_columns.join(' ')}].join(' ')
     end
 
     # GROUP句のSQL文を発行。
@@ -130,7 +142,7 @@ module GodsumModules
     end
 
     # 各種メソッドを使用してt1とt2のSQLを生成
-    def create_inner_table
+    def create_left_outer_table
       %W[select
          #{set_base_select_columns.join(',')}
          from #{table_name}
@@ -204,29 +216,41 @@ module GodsumModules
     # t1とt2のgroup句を生成
     def set_base_group_columns
       ary1 = @option_group_columns.map do |column|
-        "#{table_name}.#{column}"
-      end
+               "#{table_name}.#{column}"
+             end
       ary2 = [set_base_hiduke.join(" ")]
       ary1 + ary2
     end
 
     # t1とt2のinner join句を生成
-    def set_base_inner_join_columns
-      ["t1.#{parent_table}_id = t2.#{parent_table}_id",
-       "t1.hiduke >= t2.hiduke"].join(" and ").split
+    def set_base_left_outer_join_columns
+      if @total == false
+        ["t1.#{parent_table}_id = t2.#{parent_table}_id",
+         "t1.hiduke >= t2.hiduke"].join(" and ").split
+      else
+        ["t1.hiduke >= t2.hiduke"]
+      end
     end
 
     # t1とt3のinner join句を生成
-    def set_last_inner_join_columns
-      %W[inner join #{parent_table.pluralize} as t3 on
-         t1.#{parent_table}_id = t3.id]
+    def set_last_left_outer_join_columns
+      if @total == false
+        %W[left outer join #{parent_table.pluralize} as t3 on
+           t1.#{parent_table}_id = t3.id]
+      else
+        []
+      end
     end
 
     # t1,t2,t3を併せたテーブルのselect句を生成
     def set_select_columns
-      ary1 = PARENT_COLUMNS.map do |column|
-        "t3.#{column}"
-      end
+      ary1 = if @total == false
+               PARENT_COLUMNS.map do |column|
+                 "t3.#{column}"
+               end
+             else
+               []
+             end
       ary2 = @option_group_columns.map do |column|
         "t1.#{column}"
       end
@@ -243,9 +267,14 @@ module GodsumModules
 
     # t1,t2,t3を併せたテーブルのgroup句
     def set_last_group_columns
-      ary1 = PARENT_COLUMNS.map do |column|
-        "t3.#{column}"
-      end
+
+      ary1 = if @total == false
+               PARENT_COLUMNS.map do |column|
+                 "t3.#{column}"
+               end
+             else
+               []
+             end
       ary2 = @option_group_columns.map do |column|
         "t1.#{column}"
       end
@@ -259,6 +288,196 @@ module GodsumModules
     # t1,t2,t3を併せたテーブルのorder句
     def set_last_order_columns
       @option_order_columns
+    end
+
+    ## godsum_year用 ##
+
+    # baseとなるテーブルのSQLを生成
+    def create_base_table_year
+      %W[select
+         #{set_base_select_columns_year.join(',')}
+         from #{table_name}
+         where
+         #{set_base_where_columns_year.join(' ')}
+         group by
+         #{set_base_group_columns_year.join(',')}].join(' ')
+    end
+
+    # baseとなるselect句を生成
+    def set_base_select_columns_year
+      ary1 = if @total == false
+               ["#{table_name}.#{parent_table}_id"]
+             else
+               []
+             end
+      ary2 = @option_group_columns.map do |column|
+        "#{table_name}.#{column}"
+      end
+      ary3 = SUM_COLUMNS.map do |column|
+        "sum(#{table_name}.#{column}) as #{column}"
+      end
+      ary4 = ["#{table_name}.#{SALE_YEAR} + 1 as hiduke"]
+      ary1 + ary2 + ary3 + ary4
+    end
+
+    # baseとなるwhere句を生成
+    def set_base_where_columns_year
+      %W[#{table_name}.#{SALEDATE} between '#{@kikan[0]}'
+         and '#{@kikan[1]}' 
+         and #{table_name}.#{parent_table}_id in 
+         (#{@model_ids.join(',')})]
+    end
+
+    # baseとなるgroup句を生成
+    def set_base_group_columns_year
+      ary1 = if @total == false
+               ["#{table_name}.#{parent_table}_id"]
+             else
+               []
+             end
+      ary2 = @option_group_columns.map do |column|
+        "#{table_name}.#{column}"
+      end
+      ary1 + ary2
+    end
+
+    # t1とt2をつなげるleft outer join句を生成
+    def set_base_left_outer_join_columns_year
+      if @total == false
+        ["t1.#{parent_table}_id = t2.#{parent_table}_id",
+         "t1.#{SALE_YEAR} = t2.hiduke"].join(" and ").split
+      else
+        ["t1.#{SALE_YEAR} = t2.hiduke"]
+      end
+    end
+
+    # t1とt2をつなげたfrom句を生成
+    def create_outside_table_year
+      %W[select
+         #{set_outside_select_columns_year.join(',')}
+         from (#{create_base_table_year}) as t1
+         left outer join (#{create_base_table_year}) as t2 on
+         #{set_base_left_outer_join_columns_year.join(' ')}
+      ].join(' ')
+    end
+
+    # t1とt2がつながったテーブルのselect句
+    def set_outside_select_columns_year
+      ary1 = if @total == false
+               ["t1.#{parent_table}_id"]
+             else
+               []
+             end
+      ary2 = @option_group_columns.map do |column|
+        "t1.#{column}"
+      end
+      ary3 = SUM_COLUMNS.map do |column|
+        ["t1.#{column} as #{column}",
+         "t2.#{column} as z_#{column}"]
+      end
+      ary1 + ary2 + ary3
+    end
+
+    # 最後のselect句を生成
+    def set_last_select_columns_year
+      ary1 = if @total == false
+               PARENT_COLUMNS.map do |column|
+                 "t7.#{column}"
+               end
+             else
+               []
+             end
+      ary2 = %W[t5.#{SALE_YEAR}]
+      ary3 = if @total == false
+               %W[t5.#{parent_table}_id]
+             else
+               []
+             end
+      ary4 = SUM_COLUMNS.map do |column|
+        ["t5.#{column}",
+         "t5.z_#{column}",
+         "sum(t6.#{column}) as r_#{column}",
+         "sum(t6.z_#{column}) as r_z_#{column}"]
+      end.flatten
+      ary1 + ary2 + ary3 + ary4
+    end
+
+    # 最後のleft outer join句を生成
+    def set_last_left_outer_join_columns_year
+      ary1 = if @total == false
+               ["t5.#{parent_table}_id = t6.#{parent_table}_id"]
+             else
+               []
+             end
+      ary2 = ["t5.#{SALE_YEAR} >= t6.#{SALE_YEAR}"]
+      (ary1 + ary2).join(" and ")
+    end
+
+    # 最後のgroup句を生成
+    def set_last_group_columns_year
+      ary1 = %W[t5.#{SALE_YEAR}]
+      ary2 = if @total == false
+               PARENT_COLUMNS.map do |column|
+                 "t7.#{column}"
+               end
+             else
+               []
+             end
+      ary3 = if @total == false
+               %W[t5.#{parent_table}_id]
+             else
+               []
+             end
+      ary4 = SUM_COLUMNS.map do |column|
+        %W[t5.#{column} t5.z_#{column}]
+      end.flatten
+      ary1 + ary2 + ary3 + ary4
+    end
+
+    # 最後のorder句を生成
+    def set_last_order_columns_year
+      ary1 = %W[t5.#{SALE_YEAR}]
+      ary2 = if @total == false
+               PARENT_COLUMNS.map do |column|
+                 "t7.#{column}"
+               end
+             else
+               []
+             end
+      ary2 + ary1
+    end
+
+    # SELECT句のSQL文を発行。
+    def select_year_sql
+      set_last_select_columns_year.join(",")
+    end
+
+    # FROM句のSQL文を発行。
+    def from_year_sql
+      %W[(#{create_outside_table_year}) as t5].join(" ")
+    end
+
+    # LEFT OUTER JOIN句のSQL文を発行。
+    def left_outer_year_sql
+      ary1 = %W[left outer join (#{create_outside_table_year}) as t6
+                on #{set_last_left_outer_join_columns_year}]
+      ary2 = if @total == false
+               %W[inner join #{parent_table.pluralize} as t7 on
+                  t5.#{parent_table}_id = t7.id]
+             else
+               []
+             end
+      (ary1 + ary2).join(" ")
+    end
+
+    # GROUP句のSQL文を発行。
+    def group_year_sql
+      set_last_group_columns_year.join(",")
+    end
+
+    # ORDER句のSQL文を発行。
+    def order_year_sql
+      set_last_order_columns_year.join(",")
     end
   end
 end
