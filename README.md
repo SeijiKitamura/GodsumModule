@@ -67,13 +67,14 @@ class Sale< Activerecord
   ・・・・
 　・・・・
   private
-  # saledate列に入った値を使用して各列を更新する
+
+  # saledate列に入った値を使用して各列を代入する
   def set_date
-    update(sale_year: saledate.year,
-           sale_month: saledate.month,
-           sale_day: saledate.day,
-           sale_cweek: saledate.cweek,
-           sale_wday: saledate.wday)
+    sale_year = saledate.year
+    sale_month = saledate.month
+    sale_day = saledate.day
+    sale_cweek = saledate.cweek
+    sale_wday = saledate.wday
   end
 end
 ```
