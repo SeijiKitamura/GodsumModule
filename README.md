@@ -341,7 +341,7 @@ Model.godsum_days(startday, lastday, *model_ids, **options)
 ```
 
 | 引数 | 省略 | 説明 |
-| --- | --- |
+|---|---|---|
 | startday | 不可 | 集計する開始日を入力します。 |
 | lastday  | 不可 | 集計する終了日を入力します。 |
 | model\_ids | 不可 | 集計するIDを指定します。（複数可)|
@@ -900,6 +900,10 @@ group by
       - set\_base\_select\_columns\_year
         - set\_base\_where\_columns\_year
         - set\_base\_group\_columns\_year
+    - create\_base\_table\_year_z
+      - set\_base\_select\_columns\_year
+        - set\_base\_where\_columns\_year_z
+        - set\_base\_group\_columns\_year
     - set\_base\_left\_outer\_join\_columns\_year
 - left\_outer\_year\_sql
   - create\_outside\_table\_year
@@ -908,6 +912,10 @@ group by
     - create\_base\_table\_year\_z
       - set\_base\_select\_columns\_year
         - set\_base\_where\_columns\_year\_z
+        - set\_base\_group\_columns\_year
+    - create\_base\_table\_year_z
+      - set\_base\_select\_columns\_year
+        - set\_base\_where\_columns\_year_z
         - set\_base\_group\_columns\_year
 - group\_year\_sql
   - set\_last\_group\_columns\_year
@@ -1082,7 +1090,7 @@ select
   ,sale_sales.sale_year + 1 as hiduke
 from sale_sales 
 where 
-      sale_sales.saledate between '開始日' and '終了日' 
+      sale_sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
   and sale_sales.sale_id in (Storeのid)
 group by 
    sale_sales.sale_year

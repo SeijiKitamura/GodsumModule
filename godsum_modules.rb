@@ -374,7 +374,7 @@ module GodsumModules
          #{set_base_left_outer_join_columns_year.join(' ')}].join(' ')
     end
 
-    # t1とt2がつながったテーブルのselect句
+    # t1とt2をつなげたテーブルのselect句
     def set_outside_select_columns_year
       ary1 = if @total == false
                ["t1.#{parent_table}_id"]
