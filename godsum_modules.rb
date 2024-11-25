@@ -8,7 +8,7 @@ module GodsumModules
     SALE_DAY       = "sale_day".freeze
     SALE_CWEEK     = "sale_cweek".freeze
     SALE_WDAY      = "sale_wday".freeze
-    SUM_COLUMNS    = %w[saleamt]
+    SUM_COLUMNS    = %w[saleamt].freeze
     @group_type = ""
     @total = false
     @option_group_columns  = []
@@ -17,15 +17,15 @@ module GodsumModules
     @kikan          = []
 
     # ベースとなるメソッド
+    # rubocop:disable all
     def godsum(model_ids = [], kikan = [], group_type = :days, total = false, option_order_columns = [])
+      # rubocop:enable all
       # 引数をクラス変数にセット
       @model_ids = model_ids
       @kikan = kikan.map(&:to_date)
       @group_type = group_type
-      @total = !!total
+      @total = total
       @option_group_columns = case group_type
-                              when :years
-                                %W[#{SALE_YEAR}]
                               when :months
                                 %W[#{SALE_MONTH}]
                               when :weeks
@@ -70,7 +70,7 @@ module GodsumModules
                      Time.zone.local(startday - 1.year, 12, 25)
                    end
       z_lastday = z_startday + (lastday - startday)
-      godsum(model_ids,[z_startday, z_lastday, startday, lastday], :weeks, options[:total])
+      godsum(model_ids, [z_startday, z_lastday, startday, lastday], :weeks, options[:total])
     end
 
     # 月別売上
@@ -80,7 +80,7 @@ module GodsumModules
       lastday = lastday.to_date
       z_startday = startday - 1.year
       z_lastday = lastday - 1.year
-      godsum(model_ids, [z_startday, z_lastday, startday, lastday],:months, options[:total])
+      godsum(model_ids, [z_startday, z_lastday, startday, lastday], :months, options[:total])
     end
 
     # 年別売上
@@ -103,7 +103,9 @@ module GodsumModules
     # 12/26-31の場合、nilが返る可能性がある
     def get_z_startday(saledate)
       z_startday = nil
-      ((saledate - 1.year).beginning_of_year..(saledate - 1.year).end_of_year).each do |d|
+      startday = (saledate - 1.year).beginning_of_year
+      lastday = startday.end_of_year
+      (startday..lastday).each do |d|
         z_startday = d if d.cweek == saledate.cweek
       end
       z_startday
@@ -193,12 +195,6 @@ module GodsumModules
            else
            (#{table_name}.#{SALE_YEAR} * 100 + #{table_name}.#{SALE_MONTH})
            end]
-      when :years
-        %W[case when #{table_name}.#{SALEDATE} between '#{@kikan[0]}' and '#{@kikan[1]}' then
-           #{table_name}.#{SALE_YEAR} + 1
-           else
-           #{table_name}.#{SALE_YEAR}
-           end]
       end
     end
 
@@ -216,8 +212,8 @@ module GodsumModules
     # t1とt2のgroup句を生成
     def set_base_group_columns
       ary1 = @option_group_columns.map do |column|
-               "#{table_name}.#{column}"
-             end
+        "#{table_name}.#{column}"
+      end
       ary2 = [set_base_hiduke.join(" ")]
       ary1 + ary2
     end
@@ -267,7 +263,6 @@ module GodsumModules
 
     # t1,t2,t3を併せたテーブルのgroup句
     def set_last_group_columns
-
       ary1 = if @total == false
                PARENT_COLUMNS.map do |column|
                  "t3.#{column}"
@@ -292,13 +287,24 @@ module GodsumModules
 
     ## godsum_year用 ##
 
-    # baseとなるテーブルのSQLを生成
+    # baseとなるテーブルのSQLを生成(t1用)
     def create_base_table_year
       %W[select
          #{set_base_select_columns_year.join(',')}
          from #{table_name}
          where
          #{set_base_where_columns_year.join(' ')}
+         group by
+         #{set_base_group_columns_year.join(',')}].join(' ')
+    end
+
+    # baseとなるテーブルのSQLを生成(t2用)
+    def create_base_table_year_z
+      %W[select
+         #{set_base_select_columns_year.join(',')}
+         from #{table_name}
+         where
+         #{set_base_where_columns_year_z.join(' ')}
          group by
          #{set_base_group_columns_year.join(',')}].join(' ')
     end
@@ -323,8 +329,16 @@ module GodsumModules
     # baseとなるwhere句を生成
     def set_base_where_columns_year
       %W[#{table_name}.#{SALEDATE} between '#{@kikan[0]}'
-         and '#{@kikan[1]}' 
-         and #{table_name}.#{parent_table}_id in 
+         and '#{@kikan[1]}'
+         and #{table_name}.#{parent_table}_id in
+         (#{@model_ids.join(',')})]
+    end
+
+    # baseとなるwhere句を生成
+    def set_base_where_columns_year_z
+      %W[#{table_name}.#{SALEDATE} between '#{@kikan[0] - 1.year}'
+         and '#{@kikan[1] - 1.year}'
+         and #{table_name}.#{parent_table}_id in
          (#{@model_ids.join(',')})]
     end
 
@@ -356,9 +370,8 @@ module GodsumModules
       %W[select
          #{set_outside_select_columns_year.join(',')}
          from (#{create_base_table_year}) as t1
-         left outer join (#{create_base_table_year}) as t2 on
-         #{set_base_left_outer_join_columns_year.join(' ')}
-      ].join(' ')
+         left outer join (#{create_base_table_year_z}) as t2 on
+         #{set_base_left_outer_join_columns_year.join(' ')}].join(' ')
     end
 
     # t1とt2がつながったテーブルのselect句
