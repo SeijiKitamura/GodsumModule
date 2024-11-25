@@ -905,9 +905,9 @@ group by
   - create\_outside\_table\_year
   - set\_last\_outer\_join\_columns\_year
     - set\_outside\_select\_columns\_year
-    - create\_base\_table\_year
+    - create\_base\_table\_year\_z
       - set\_base\_select\_columns\_year
-        - set\_base\_where\_columns\_year
+        - set\_base\_where\_columns\_year\_z
         - set\_base\_group\_columns\_year
 - group\_year\_sql
   - set\_last\_group\_columns\_year
@@ -951,7 +951,7 @@ from (
        sale_sales.sale_year
       ,sale_sales.sale_id
       ,sum(sale_sales.saleamt) as saleamt
-      ,sale_sales.sale_year as hiduke
+      ,(sale_sales.sale_year + 1) as hiduke
     from sale_sales 
     where 
           sale_sales.saledate between '開始日' and '終了日' 
@@ -967,7 +967,7 @@ from (
        sale_sales.sale_year
       ,sale_sales.sale_id
       ,sum(sale_sales.saleamt) as saleamt
-      ,sale_sales.sale_year + 1 as hiduke
+      ,(sale_sales.sale_year + 1) as hiduke
     from sale_sales 
     where 
           sale_sales.saledate between '開始日' and '終了日' 
@@ -1052,25 +1052,129 @@ order by
 
 ## 1) t1テーブル
 model\_id、年ごとに集計をします。
+このテーブルのhiduke列は特に意味はありません。
+
+```sql
+select 
+   sale_sales.sale_year
+  ,sale_sales.sale_id
+  ,sum(sale_sales.saleamt) as saleamt
+  ,(sale_sales.sale_year + 1) as hiduke
+from sale_sales 
+where 
+      sale_sales.saledate between '開始日' and '終了日' 
+  and sale_sales.sale_id in (Storeのid)
+group by 
+  sale_sales.sale_year
+ ,sale_sales.sale_id
+```
 
 ## 2) t2テーブル
-model\_id、年ごとに集計をします。
-同時にhiduke(sale\_year + 1)列を追加しています。
+t1と同じテーブルですがwhere句に1年前の期間を
+セットし前年用のデータを抽出します。
+hiduke列(sale\_year + 1)を追加しています。
+
+```sql
+select 
+   sale_sales.sale_year
+  ,sale_sales.sale_id
+  ,sum(sale_sales.saleamt) as saleamt
+  ,sale_sales.sale_year + 1 as hiduke
+from sale_sales 
+where 
+      sale_sales.saledate between '開始日' and '終了日' 
+  and sale_sales.sale_id in (Storeのid)
+group by 
+   sale_sales.sale_year
+  ,sale_sales.sale_id
+```
 
 ## 3) t5テーブル
 t1とt2をleft outer joinします。
 joinする際、t1.sale\_year = t2.hiduke(sale\_year + 1)と
 することでt1は今年の売上、t2は前年売上になります。
 
+```sql
+select
+   t1.sale_year
+  ,t1.sale_id
+  ,t1.saleamt
+  ,t2.saleamt as z_saleamt
+from (
+  /* t1 start */
+  /* t1 end */
+  left outer join (
+  /* t2 start */
+  /* t2 end */
+  on
+  /* t1 t2 inner join start */
+) as t5
+```
+
 ## 4) t6テーブル
 累計用にt5と同じテーブルを用意しt5とleft outer joinします。
 その際、t5.sale\_year >= t6.sale\_year とすることで
 今年よりも小さい行を積み重ねています。
 
+```sql
+left outer join (
+  select
+     t1.sale_year
+    ,t1.sale_id
+    ,t1.saleamt
+    ,t2.saleamt as z_saleamt
+  from (
+    /* t1 start */
+    /* t1 end */
+    left outer join (
+    /* t2 start */
+    /* t2 end */
+    on
+    /* t1 t2 inner join start */
+) as t6 on
+      t5.sale_year >= t6.sale_year
+  and t5.sale_id = t6.sale_id
+```
+
 ## 5) t7テーブル
-マスタテーブルをt5とinner joinします。
+マスタテーブルとt5をinner joinします。
+
+```sql
+inner join stores as t7 on t5.sale_id = t7.id
+```
 
 ## 6) 仕上げ
 t5から今年と前年の売上、t6から累計用のデータを選択しsumします。
 t7から属性値を選択しています。
 t5,t7の列をgroup byして完成です。
+
+```sql
+select
+   t5.sale_year
+  ,t5.sale_id
+  ,t7.number
+  ,t7.name
+  ,t5.saleamt
+  ,t5.z_saleamt
+  ,sum(t6.saleamt) as r_saleamt
+  ,sum(t6.z_saleamt) as r_z_saleamt
+from (
+  /* t5 start */
+) as t5
+ left outer join (
+   /* t6 start */
+) as t6 on
+  /* t5 t6 left outer join start */
+inner join store as t7 on
+  /* t7 inner join start */
+group by
+   t5.sale_year
+  ,t5.sale_id
+  ,t5.saleamt
+  ,t5.z_saleamt
+  ,t7.number
+  ,t7.name
+order by
+   t7.number
+  ,t5.sale_year;
+```
