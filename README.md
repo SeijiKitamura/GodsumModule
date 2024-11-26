@@ -10,8 +10,8 @@ Ruby on Rails / ActiveRecord
 ★ 部分を簡単に集計できるActiveRecord用Moduleです。
 
 ## はじめに
-データの集計と言えばsum関数ですが集計したデータ前年
-を比較したり累計や合計を求めて1つの表にしようとすると
+データの集計と言えばsum関数ですが集計したデータを前年
+と比較したり累計や合計を求めて1つの表にしようとすると
 思いのほか苦労します。
 またグループ化する列も月や日のほかに年や週なども
 必要になるときもあります。
@@ -279,7 +279,7 @@ ActiveRecord\_Relationが返ります。
 
 | 列名 | 説明 |
 | --- | --- |
-| sale_month | 年 |
+| sale_month | 月 |
 | (model)\_id | 親モデルのid |
 | saleamt | 期間売上 |
 | z\_saleamt | 期間前年売上 |
@@ -1004,7 +1004,7 @@ from (
       ,(sales.sale_year + 1) as hiduke
     from sales 
     where 
-          sales.saledate between '開始日' and '終了日' 
+          sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
       and sales.sale_id in (Storeのid)
     group by 
        sales.sale_year
@@ -1049,7 +1049,7 @@ from (
        ,sales.sale_year + 1 as hiduke
      from sales 
      where 
-          sales.saledate between '開始日' and '終了日' 
+          sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
       and sales.sale_id in (Storeのid)
      group by 
         sales.sale_year
