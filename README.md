@@ -142,7 +142,7 @@ idを指定するとmodel\_id、年でグループ化された値の合計を取
 ことができます。
 
 ```ruby
-Model.godsum_years(startday, lastday, *model_ids, **options)
+Model.godsum_years(startday, lastday, **options)
 ```
 
 **引数**
@@ -163,7 +163,6 @@ ActiveRecord\_Relationが返ります。
 | 列名 | 説明 |
 | --- | --- |
 | sale\_year | 年 |
-| (model)\_id | 親モデルのid |
 | saleamt | 期間売上 |
 | z\_saleamt | 期間前年売上 |
 | r\_saleamt | 期間累計売上 |
@@ -218,7 +217,6 @@ Model.godsum_months(startday, lastday, **options)
 | --- | --- |
 | startday | 集計する開始日を入力します。 |
 | lastday  | 集計する終了日を入力します。 |
-| model\_ids | 集計するIDを指定します。（複数可)|
 | options[:model] | 可 | 集計するModelを指定します |
 | options[:sum_columns] | 可 | 集計する列を指定します |
 
@@ -231,7 +229,6 @@ ActiveRecord\_Relationが返ります。
 | 列名 | 説明 |
 | --- | --- |
 | sale_month | 月 |
-| (model)\_id | 親モデルのid |
 | saleamt | 期間売上 |
 | z\_saleamt | 期間前年売上 |
 | r\_saleamt | 期間累計売上 |
@@ -286,7 +283,7 @@ startday,lastdayに任意の期間を指定しmodel\_id、月、日で
 グループ化された値の合計を取り出すことができます。
 
 ```ruby
-Model.godsum_days(startday, lastday, *model_ids, **options)
+Model.godsum_days(startday, lastday, **options)
 ```
 
 | 引数 | 省略 | 説明 |
@@ -307,7 +304,6 @@ ActiveRecord\_Relationが返ります。
 | --- | --- |
 | sale_month | 月 |
 | sale_day | 日 |
-| (model)\_id | 親モデルのid |
 | saleamt | 期間売上 |
 | z\_saleamt | 期間前年売上 |
 | r\_saleamt | 期間累計売上 |
@@ -371,7 +367,6 @@ ActiveRecord\_Relationが返ります。
 | 列名 | 説明 |
 | --- | --- |
 | sale\_cweek | 週 |
-| (model)\_id | 親モデルのid |
 | saleamt | 期間売上 |
 | z\_saleamt | 期間前年売上 |
 | r\_saleamt | 期間累計売上 |
@@ -416,7 +411,7 @@ store\_id、週でグループ化したsaleamtが集計されます。
 | 1 |  ・・・ | ・・・ |
 | 2 |  ・・・ | ・・・ |
 
-## godsum_sub
+## godsum_grand
 期間合計値を表示します。
 
 ```ruby
