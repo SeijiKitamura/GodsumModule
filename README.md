@@ -13,8 +13,6 @@ Ruby on Rails / ActiveRecord
 データの集計と言えばsum関数ですが集計したデータを前年
 と比較したり累計や合計を求めて1つの表にしようとすると
 思いのほか苦労します。
-またグループ化する列も月や日のほかに年や週なども
-必要になるときもあります。
 GodsumModuleを使用することで今年のデータはもちろん、
 前年や累計も簡単に集計できます。
 グループ化する列も「年、月、週、日」の4つから
@@ -33,7 +31,7 @@ Railsを使用して会社の売上データを管理したい方におすすめ
 | | 列名 | 型 | 説明
 |---|---|---|---|
 |★| id | integer | | 
-|★| number | integer | 店番号 | 
+|| number | integer | 店番号 | 
 || name | string | 店名 | 
 || ・・・ | ・・・ | ・・・ |
 || ・・・ | ・・・ | ・・・ |
@@ -67,6 +65,7 @@ Railsを使用して会社の売上データを管理したい方におすすめ
 **Store(親モデル）**
 ```ruby
 class Store < Activerecord
+  include GodsumModules
   has_many :sales
 end
 ```
@@ -74,7 +73,6 @@ end
 **Sale(子モデル）**
 ```ruby
 class Sale< Activerecord
-  include GodsumModules
   belongs_to :store
   validates :saledate, presence: true
 　before_save :set_date 
@@ -95,20 +93,31 @@ end
 
 ## インストール
 app/model/concernsにgodsum_modules.rbを配置してください。
-その後、データを管理しているmodelに以下のコードを記述します。
+その後、マスタを管理しているmodelに以下のコードを記述します。
 
 ```ruby
-class Sale < Activerecord
+class Store < Activerecord
   include GodsumModules
-  belongs_to :store
+  has_many :sales
   ・・・・
 　・・・・
 end
 ```
 
+## 設定
+godsum\_modules.rbにある定数の値をDBの列名に合わせて変更することができます。
+| 定数名 | 説明 | デフォルト |
+|---|---|---|
+| SALEDATE | 子テーブルの日付列名 | saledate |
+| SALE\_YEAR| 子テーブルの年列名 | sale\_year |
+| SALE\_MONTH| 子テーブルの月列名 | sale\_month |
+| SALE\_DAY| 子テーブルの日列名 | sale\_day |
+| SALE\_CWEEK| 子テーブルの週列名 | sale\_cweek |
+| SALE\_WDAY| 子テーブルの曜日列名 | sale\_wday |
+| SUM\_COLUMNS| 子テーブルの集計したい列名を配列で登録します。 | [saleamt] |
+
 ## 使い方
-子モデルにクラスメソッド(godsum\_years,godsum\_months,
-godsum\_weeks,godsum\_days)が追加されます。
+親モデルにクラスメソッドが追加されます。
 これらを使用してデータを集計します。
 
 ## 戻り値
@@ -124,7 +133,7 @@ godsum\_weeks,godsum\_days)が追加されます。
 | r\_z\_ | 前年累計| r\_z\_saleamt | 前年累計売上 |
 
 ## 使用できるメソッド
-4つのメソッドが追加されます。以下にそれぞれの使い方を説明します。
+6つのメソッドが追加されます。以下にそれぞれの使い方を説明します。
 
 ## godsum\_years
 年別の合計を表示するメソッドです。
@@ -142,27 +151,8 @@ Model.godsum_years(startday, lastday, *model_ids, **options)
 |---|---|---|
 | startday | 不可 | 集計開始日を入力します。 |
 | lastday  | 不可 | 集計終了日を入力します。 |
-| model\_ids | 不可 | 集計するIDを指定します。（複数可)|
-| options[:total] | 可 | false or true |
-
-**options**
-
-- options[total: false] 年、model\_idsでグループ化した値の合計を表示します。(default)
-- options[total: true] 年でグループ化した値の合計を表示します。
-
-total: falseとtotal:trueの違いをSQLで示すと以下の通りとなります。
-
-```
-options[total: false] | options[total: true]
-select                | select
-  sale_id             |   sale_year
- ,sale_year           |  ,sum(saleamt)
- ,sum(saleamt)        | from sales
-from sales            | group by
-group by              |   sale_year
-  sale_id             |
- ,sale_year           |
-```
+| options[:model] | 可 | 集計するModelを指定します |
+| options[:sum_columns] | 可 | 集計する列を指定します |
 
 **戻り値**
 
@@ -198,8 +188,9 @@ Sale(子テーブル）に以下のデータが入っています。
 **実行:** 
 
 ```ruby
-@store = Store.find(params[:id])
-@sales = Sale.godsum_years("2022-01-01", "2024-12-31", @store.id)
+@store = Store.first
+@sales = Store.godsum_years("2022-01-01", "2024-12-31")
+              .where(stores: { id: @store.id })
 ```
 
 **結果:** 
@@ -213,49 +204,13 @@ store\_id、年でグループ化したsaleamtが集計されます。
 | 1 | 2024 | 300 | 600 | 200 | 300 | 1 | store 1 |  ・・・|
 
 
-**例2 全店舗の売上合計を求める**
-
-Store(親テーブル)に以下のデータが入っています。
-
-| id | number | name | ・・・|
-|---|---|---|---|
-| 1 | 1 | store\_1| ・・・ |
-| 1 | 2 | store\_2| ・・・ |
-
-Sale(子テーブル）に以下のデータが入っています。
-
-| id | store\_id | saledate | saleamt | ・・・ | 
-|---|---|---|---|---|
-| 124 | 1 | 2022-01-01 | 100 | ・・・ |
-| 125 | 1 | 2023-01-01 | 200 | ・・・ |
-| 126 | 1 | 2024-01-01 | 300 | ・・・ |
-| 124 | 2 | 2022-01-01 | 400 | ・・・ |
-| 125 | 2 | 2023-01-01 | 500 | ・・・ |
-| 126 | 2 | 2024-01-01 | 600 | ・・・ |
-
-**実行:** 
-
-```ruby
-@stores = Store.all
-@sales = Sale.godsum_years("2022-01-01", "2024-12-31", @stores.ids, total: true)
-```
-
-**結果:** 
-
-年でグループ化したsaleamtが集計されます。
-
-| sale_year | saleamt | r_saleamt | z_saleamt | r_z_saleamt|
-| --- | --- | --- | --- | --- |
-| 2022 | 500 | 500 | | |
-| 2023 | 700 | 1200 | 500 | 500 |
-| 2024 | 900 | 2100 | 700 | 1200 
-
 ## godsum\_months
 月別の合計を表示するメソッドです。
-startday,lastdayに任意の期間を指定し、model\_idsに親テーブルのidを指定するとmodel\_id、月でグループ化された値の合計を取り出すことができます。
+startday,lastdayに任意の期間を指定すると
+月でグループ化された値の合計を取り出すことができます。
 
 ```ruby
-Model.godsum_months(startday, lastday, *model_ids, **options)
+Model.godsum_months(startday, lastday, **options)
 ```
 
 **引数**
@@ -264,12 +219,8 @@ Model.godsum_months(startday, lastday, *model_ids, **options)
 | startday | 集計する開始日を入力します。 |
 | lastday  | 集計する終了日を入力します。 |
 | model\_ids | 集計するIDを指定します。（複数可)|
-| options[:total] | 可 | false or true |
-
-**options**
-
-- options[total: false] 月、model\_idsでグループ化した値の合計を表示します。(default)
-- options[total: true] 月でグループ化した値の合計を表示します。
+| options[:model] | 可 | 集計するModelを指定します |
+| options[:sum_columns] | 可 | 集計する列を指定します |
 
 **戻り値**
 
@@ -289,8 +240,8 @@ ActiveRecord\_Relationが返ります。
 **注意事項**
 
 - startdayとlastdayの間隔は1年未満にしてください。
-  - 1年以上を指定してもエラーにはなりません。
-  - ロジック上、正しい値は表示されません。
+  - 1年以上を指定してもエラーにはなりませんが
+    ロジック上、正しい値は表示されません。
 
 **例1 1店舗の売上合計を求める**
 
@@ -315,7 +266,8 @@ Sale(子テーブル）に以下のデータが入っています。
 
 ```ruby
 @store = Store.find(params[:id])
-@sales = Sale.godsum_months("2024-05-01","2024-7-31", @store.id)
+@sales = Store.godsum_months("2024-05-01","2024-7-31")
+              .where(stores: { id: @store.id })
 ```
 
 **結果:** 
@@ -328,30 +280,10 @@ store\_id、月でグループ化したsaleamtが集計されます。
 | 1 | 6 | 500 | 900 | 200 | 300 | ・・・ |
 | 1 | 7 | 600 | 1500 |300 | 600 | ・・・ |
 
-**例2 全店舗の売上合計を求める**
-
-全店舗合計の月別売上を求める場合は以下のコマンドを入力します。
-
-**実行:** 
-
-```ruby
-@stores = Store.all
-@sales = Sale.godsum_months("2024-05-01", "2024-07-31", @stores.ids, total: true)
-```
-
-**結果:** 
-
-月でグループ化したsaleamtが集計されます。
-
-| sale\_month | saleamt | r\_sale\_amt| z\_saleamt  | r\_z\_saleamt | ・・・ |
-|---|---|---|---|---|---|
-| 5 | 400 | 400 | 100 | 100 | ・・・ |
-| 6 | 500 | 900 | 200 | 300 | ・・・ |
-| 7 | 600 | 1500 |300 | 600 | ・・・ |
-
 ## godsum\_days
 日別の合計を表示するメソッドです。
-startday,lastdayに任意の期間を指定し、model\_idsに親テーブルのidを指定するとmodel\_id、月、日でグループ化された値の合計を取り出すことができます。
+startday,lastdayに任意の期間を指定しmodel\_id、月、日で
+グループ化された値の合計を取り出すことができます。
 
 ```ruby
 Model.godsum_days(startday, lastday, *model_ids, **options)
@@ -361,13 +293,9 @@ Model.godsum_days(startday, lastday, *model_ids, **options)
 |---|---|---|
 | startday | 不可 | 集計する開始日を入力します。 |
 | lastday  | 不可 | 集計する終了日を入力します。 |
-| model\_ids | 不可 | 集計するIDを指定します。（複数可)|
-| options[:total] | 可 | false or true |
+| options[:model] | 可 | 集計するModelを指定します |
+| options[:sum_columns] | 可 | 集計する列を指定します |
 
-**options**
-
-- options[total: false] 月、日、model\_idsでグループ化した値の合計を表示します。(default)
-- options[total: true] 月、日でグループ化した値の合計を表示します。
 
 **戻り値**
 
@@ -388,8 +316,8 @@ ActiveRecord\_Relationが返ります。
 **注意事項**
 
 - startdayとlastdayの間隔は1年未満にしてください。
-  - 1年以上を指定してもエラーにはなりません。
-  - ロジック上、正しい値は表示されません。
+  - 1年以上を指定してもエラーにはなりませんが
+    ロジック上、正しい値は表示されません。
 
 **例1 1店舗の売上合計を求める**
 
@@ -407,7 +335,8 @@ Sale(子テーブル）に以下のデータが入っています。
 
 ```ruby
 @store = Store.first
-@sales = Sale.godsum_days("2024-05-01", "2024-05-03", @store.id)
+@sales = Store.godsum_days("2024-05-01", "2024-05-03")
+              .where(stores: { id: @store.id })
 ```
 
 **結果:** 
@@ -420,40 +349,18 @@ store\_id、月、日でグループ化したsaleamtが集計されます。
 | 1 | 5 | 2 | 500 | 900  | 200 | 300 |
 | 1 | 5 | 3 | 600 | 1500 | 300 | 600 |
 
-**例2 全店舗の売上合計を求める**
-全店舗合計の日別売上を求める場合は以下のコマンドを入力します。
-
-```ruby
-@stores = Store.all
-@sales = Sale.godsum_days("2024-05-01", "2024-05-03", @stores.ids, total: true)
-```
-
-**結果:** 
-
-月、日でグループ化したsaleamtが集計されます。
-
-| sale\_month | sale\_day | saleamt | z\_saleamt | r\_saleamt | r\_z\_saleamt |
-|---|---|---|---|---|---|
-| 5 | 1 | xxx | xxx | xxx | xxx |
-| 5 | 2 | xxx | xxx | xxx | xxx |
-| 5 | 3 | xxx | xxx | xxx | xxx |
-
 ## godsum\_weeks
 週別の合計を表示するメソッドです。
-startday,lastdayに任意の期間を指定し、model_idsに親テーブルのidを指定するとmodel_id、週でグループ化された値の合計を取り出すことができます。
+startday,lastdayに任意の期間を指定すると
+model_id、週でグループ化された値の合計を取り出すことができます。
 
 **引数**
 | 引数 | 説明 |
 | --- | --- |
 | startday | 集計する開始日を入力します。 |
 | lastday  | 集計する終了日を入力します。 |
-| model\_ids | 集計するIDを指定します。（複数可)|
-| options[:total] | 可 | false or true |
-
-**options**
-
-- options[total: false] 週、model\_idsでグループ化した値の合計を表示します。(default)
-- options[total: true] 週でグループ化した値の合計を表示します。
+| options[:model] | 可 | 集計するModelを指定します |
+| options[:sum_columns] | 可 | 集計する列を指定します |
 
 **戻り値**
 
@@ -473,9 +380,9 @@ ActiveRecord\_Relationが返ります。
 **注意事項**
 
 - startdayとlastdayの間隔は1年未満にしてください。
-  - 1年以上を指定してもエラーにはなりません。
-  - ロジック上、正しい値は表示されません。
-- 年末に正しい値が表示されない可能性がある
+  - 1年以上を指定してもエラーにはなりませんが
+    ロジック上、正しい値は表示されません。
+- 年末に正しい値が表示されない可能性があります。
   - 7年に一度前年の週数が存在しない場合があります。
 
 **例1 1店舗の売上合計を求める**
@@ -484,7 +391,8 @@ ActiveRecord\_Relationが返ります。
 
 ```ruby
 @store = Store.find(params[:id])
-@sales = Sale.godsum_weeks("2024-05-01", "2024-05-08", @store.id)
+@sales = Stgre.godsum_weeks("2024-05-01", "2024-05-08")
+              .where(stores: {id: @store.id })
 ```
 
 **結果:** 
@@ -496,719 +404,26 @@ store\_id、週でグループ化したsaleamtが集計されます。
 | 1 | 18 | ・・・ | ・・・ | ・・・ | ・・・ |
 
 
-**例2 全店舗の売上合計を求める**
-
-**実行:** 
-
-```ruby
-@store = Store.all
-@sales = Sale.godsum_weeks("2024-05-01", "2024-05-08", @stores.ids)
-```
-
-**結果:** 
-
-週でグループ化したsaleamtが集計されます。
-
-| sale\_cweek | saleamt | z\_saleamt | r\_saleamt | r\_z\_saleamt |
-|---|---|---|---|---|
-| 18 | ・・・ | ・・・ | ・・・ | ・・・ |
-
-## modle\_idsを複数指定した場合
-上記すべてのメソッドの第3引数の複数のmodel\_idを
-配列にするとmodel\_idごとに集計されます。
-
-**使用例**
-
-Store(親テーブル)に以下のデータが入っています。
-| id | number | name | ・・・|
-|---|---|---|---|
-| 1 | 1 | store\_1| ・・・ |
-| 2 | 2 | store 2| ・・・ |
-
-Sale(子テーブル）に以下のデータが入っています。
-| id | store\_id | saledate | saleamt | ・・・|
-|---|---|---|---|---|
-| 100 | 1 | 2023-05-01 | 100 | ・・・ |
-| 101 | 2 | 2023-05-01 | 200 | ・・・ |
-| 102 | 1 | 2023-06-01 | 300 | ・・・ |
-| 124 | 2 | 2023-06-01 | 400 | ・・・ |
-| 125 | 1 | 2024-05-01 | 500 | ・・・ |
-| 126 | 2 | 2024-05-01 | 600 | ・・・ |
-| 125 | 1 | 2024-06-01 | 700 | ・・・ |
-| 126 | 2 | 2024-06-01 | 800 | ・・・ |
-
-
-**実行:** 
-
-データが入っているmodelのクラスメソッド`godsum_weeks`を実行します。
+## godsum_sub
+親モデルIDでグループ化した値を表示します。
 
 ```ruby
-@stores = Store.all
-@sales = Sale.godsum_weeks("2024-01-01", "2024-12-31", @stores.ids)
+@sales = Store.godsum_sub("2024-05-01","2024-05-31")
 ```
 
-store\_id、年をグループ化した売上の合計が表示されます。
-| store\_id |sale\_week | saleamt | r\_saleamt | z\_saleamt | r\_z\_saleamt| number | name |・・・ |
-|---|---|---|---|---|---|---|---|---|
-| 1 | 18 | 500 | 500 | 100 | 100 | 1 | store\_1 |
-| 1 | 19 | 700 | 1200 | 300 | 400 | 1 | store\_1 |
-| 2 | 18 | 500 | 500 | 200 | 200 | 2 | store\_2 |
-| 2 | 19 | 700 | 1200 | 400 | 600 | 2 | store\_2 |
-
-## 合計行
-
-以下のような表で合計行を追加したい場合、
-r\_列を使用することができます。
-
-```ruby
-@store = Store.find(params[:id])
-@sales = Sale.godsum_days("2024-05-01","2024-05-31", @store.id)
-```
-
-```ruby
-# html.erb
-<% last_sale = nil %>
-<% @sales.each do |sale| %>
-  <tr>
-    <td><%= sale.sale_month %>月</td>
-    <td><%= sale.sale_day %>日</td>
-    <td><%= sale.saleamt %></td>
-  </tr>
-  <% last_sale = sale.clone %>
-<% end %>
-<% if last_sale.present? %>
-  <tr>
-    <td>合計:</td>
-    <td></td>
-    <td><%= last_sale.r_saleamt %></td>
-  </tr>
-<% end %>
-```
-
-## 設定
-godsum\_modules.rbにある定数の値をDBの列名に合わせて変更することができます。
-| 定数名 | 説明 | デフォルト |
+| id | saleamt | z\_saleamt |
 |---|---|---|
-| PARENT\_COLUMNS | 親テーブルの表示したい列名を配列で登録します。| [number] |
-| SALEDATE | 子テーブルの日付列名 | saledate |
-| SALE\_YEAR| 子テーブルの年列名 | sale\_year |
-| SALE\_MONTH| 子テーブルの月列名 | sale\_month |
-| SALE\_DAY| 子テーブルの日列名 | sale\_day |
-| SALE\_CWEEK| 子テーブルの週列名 | sale\_cweek |
-| SALE\_WDAY| 子テーブルの曜日列名 | sale\_wday |
-| SUM\_COLUMNS| 子テーブルの集計したい列名を配列で登録します。 | [saleamt] |
+| 1 |  ・・・ | ・・・ |
+| 2 |  ・・・ | ・・・ |
 
-## Godsum Modulesの仕組み
-引数を元に売上、前年売上、累計を表示するSQLを順番に組み立てて最後に
-ActiveRecodeにSQLを渡してデータを表示しています。
-
-## godsumメソッド
-上記で説明した3つのメソッド(godsum\_months,\_days,\_weeks)は
-godsumメソッドのラッパーです。
-godsumメソッドはprivateメソッドを使用してSQL文を作成し
-最後に以下のコマンドを実行してActiveRecordを返します。
+## godsum_sub
+期間合計値を表示します。
 
 ```ruby
- select(select_sql)
-   .from(from_sql)
-   .joins(inner_join_sql)
-   .group(last_group_sql)
-   .order(last_order_sql)
+@sales = Store.godsum_grand("2024-05-01","2024-05-31")
 ```
 
-## privateメソッド(\_months,\_days,\_weeks用)
-SQLを生成するためのメソッドになっています。
-%W[]を使用して配列のなかにSQLを記述します。
-最後にjoinを使ってSQL文字列にしています。
-メソッドが呼び出されるとインデントしたメソッドが実行されます。
-
-(**godsum\_years**はロジックが違うため別のメソッドを使用しています。)
-
-
-- select\_sql
-  - set\_select\_columns
-- from\_sql
-  - create\_inner\_table
-    - set\_base\_select\_columns
-      - set\_base\_hiduke
-    - set\_base\_where\_columns
-    - set\_base\_group\_columns
-      - set\_base\_hiduke
-- inner\_join\_sql
-  - create\_iner\_table
-    - set\_base\_inner\_join\_columns
-    - set\_last\_iner\_join\_columns
-- last\_group\_sql
-  - set\_last\_group\_columns
-- last\_order\_sql
-
-メソッドの命名規則は以下の通りです。
-| 接頭辞 | 意味 |
-| --- | --- |
-| \_sql | 最終SQL生成メソッド|
-| create\_ | t1,t2を生成するメソッド|
-| set\_ | select句、from句などを生成するメソッド|
-
-## SQL
-1つのテーブルに2つの別名(t1,t2)を付けて自己結合し
-今年、前年、累計を求めています。
-最後に親テーブル(t3)とinner joinしています。
-
-| テーブル名 | 別名 | 説明|
-|---|---|---|
-| sale | t1 | caseを使用し今年と前年を表示 |
-| sale | t2 | 累計用。t1と同じ構成 |
-| store | t3 | マスタテーブル |
-
-:daysを選択した場合実行されるSQLは以下の通りです。
-
-```sql
-select
-   t3.number
-  ,t3.name
-  ,t1.store_id
-  ,t1.sale_month
-  ,t1.sale_day
-  ,t1.saleamt
-  ,t1.z_saleamt
-  ,sum(t2.saleamt) as r_saleamt
-  ,sum(t2.z_saleamt) as r_z_saleamt
-from (
-  /* t1 start */
-  select
-     sales.store_id
-    ,sales.sale_month
-    ,sales.sale_day
-    ,sum(case when sales.saledate between '前年開始日' and '前年終了日' then sales.saleamt else 0 end) as z_saleamt
-    ,sum(case when sales.saledate between '今年開始日' and '今年終了日' then sales.saleamt else 0 end) as saleamt
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end as hiduke
-  from sales
-  where
-    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
-    or
-    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
-  group by
-     sales.store_id
-    ,sales.sale_month
-    ,sales.sale_day
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end
-  /* t1 end */
-) as t1
-left outer join (
-  /* t2 start */
-  select
-     sales.store_id
-    ,sales.sale_month
-    ,sales.sale_day
-    ,sum(case when sales.saledate between '前年開始日' and '前年終了日' then sales.saleamt else 0 end) as z_saleamt
-    ,sum(case when sales.saledate between '今年開始日' and '今年終了日' then sales.saleamt else 0 end) as saleamt
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end as hiduke
-  from sales
-  where
-    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
-    or
-    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
-  group by
-     sales.store_id
-    ,sales.sale_month
-    ,sales.sale_day
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end
-  /* t2 end */
-) as t2 on
-      t1.store_id = t2.store_id
-  and t1.hiduke >= t2.hiduke 
-left outer join store as t3 on
-  t1.store_id = t3.store_id
-group by
-   t3.number
-  ,t3.name
-  ,t1.store_id
-  ,t1.sale_month
-  ,t1.sale_day
-  ,t1.saleamt
-  ,t1.z_saleamt
-order by
-   t1.sale_month
-  ,t1.sale_day
-  ,t3.number
-```
-
-## t1テーブルの説明
-1つのテーブルで今年と前年の売上を表現するためにcaseを使用して値を振り分けています。
-集計キーとなる列でgroupをかけて最終的な値を算出します。
-
-```sql
-  select
-     sales.store_id
-  1),sales.sale_month
-    ,sales.sale_day
-  2),sum(case when sales.saledate between '前年開始日' and '前年終了日' then sales.saleamt else 0 end) as z_saleamt
-    ,sum(case when sales.saledate between '今年開始日' and '今年終了日' then sales.saleamt else 0 end) as saleamt
-  3),case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end as hiduke
-  from sales
-  where
-    sales.saledate between '前年開始日' and '前年終了日' and sales.store_id in (Storeのid) 
-    or
-    sales.saledate between '今年開始日' and '今年終了日' and sales.store_id in (Storeのid) 
-  group by
-     sales.store_id
-  1),sales.sale_month
-    ,sales.sale_day
-  4),case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end
-```
-
-1)group\_typeによってここの列は変化します。
-
-```sql
-    ,sales.sale_month
-    ,sales.sale_day
-```
-
-| group\_type | 列 |
-| --- | --- |
-| :months | sale\_month |
-| :weeks | sale\_week |
-| :days | sale\_month sale\_day|
-| :wdays | sale\_cweek sale\_wday |
-
-2)日付で振り分け
-
-```sql
-    ,sum(case when sales.saledate between '前年開始日' and '前年終了日' then sales.saleamt else 0 end) as z_saleamt
-    ,sum(case when sales.saledate between '今年開始日' and '今年終了日' then sales.saleamt else 0 end) as saleamt
-```
-
-saledateの値を見て前年と今年に振り分けています。
-同時に前年なら接頭辞「z\_」を列名に付与、今年ならそのままの列名に指定しています。
-対象外の日付が来た場合、0が代入されるのでsumを使って0の行を消すイメージになります。
-
-3)left outer join用の列
-
-```sql
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end as hiduke
-```
-
-t2テーブルとleft outer joinして累計値を求める際、今年の日付が必要になります。
-そのため前年日付に1年追加した列を新たに追加しています。
-日付を整数に変換してDBの差異をなくしました。
-この列を追加したことで年をまたいだデータも
-表示可能となっています。
-またgroup\_typeによってcase内の計算式が以下のように変化します。
-| group\_type | 計算式 |
-| --- | --- |
-| :months | (sales.sale\_year + 1) * 1000 + sales.month * 100|
-| :weeks | (sales.sale\_year + 1) * 100 + sales.week|
-| :days | (sales.sale\_year + 1) * 1000 + sales.month * 100 + sales.sale\_day|
-| :wdays | (sales.sale\_year + 1) * 1000 + sales.cweek * 100 + sales.sale\_wday|
-
-4)group句について
-
-```sql
-    ,case when sales.saledate between between '前年開始日' and '前年終了日' then
-       (sales.sale_year + 1) * 1000 + sales.sale_month * 100 + sales.sale_day
-     else
-       sales.sale_year * 1000 + sales.sale_month * 100 + sales.sale_day 
-     end
-```
-
-集計する際に3で追加した列も必要になるため追加していています。3との違いは最後の「as hiduke」
-がありません。
-
-## t2テーブルの説明
-t2テーブルは累計を求めるためのテーブルで内容はt1と同じになっています。
-このテーブルで重要な点は以下のleft outer joinです。
-
-```sql
-t2 on
-      t1.store_id = t2.store_id
-  and t1.hiduke >= t2.hiduke
-```
-
-3)で作成したhiduke列に不等号（t1.hiduke >= t2.hiduke)を使用して
-t1.saledateよりも小さいt2のデータをjoinしています。
-これを最後にsumすれば日ごとの累計値を求めることができます。
-
-## t3テーブルの説明
-
-```sql
-inner join store as t3 on
-  t1.store_id = t3.store_id
-```
-
-親テーブルとinner joinすることで抽出したデータの属性値を表示可能にしています。
-
-## 外側のselect句
-t1,t2,t3がすべてjoinされたので最後のSELECTを行います。
-
-```sql
-select
-   t3.number
-  ,t3.name
-  ,t1.store_id
-1),t1.sale_month
-1),t1.sale_day
-  ,t1.saleamt
-  ,t1.z_saleamt 
-  ,sum(t2.saleamt) as r_saleamt
-  ,sum(t2.z_saleamt) as r_z_saleamt
-```
-
-t1には今年と前年の売上が入っているのでそのまま表示、
-t2には累計用のデータが積み重なっているので
-それを集計します。それぞれの列名には接頭辞「r\_」を付与しています。
-
-1)group\_typeによってここの列は変化します。
-
-```sql
-    ,t1.sale\_month
-    ,t1.sale\_day
-```
-   
-## 外側のgroup句
-t2の累計値を求めるためt1,t3の列をグループにしています。
-
-```sql
-group by
-   t3.number
-  ,t3.name
-  ,t1.store_id
-1),t1.sale_month
-1),t1.sale_day
-  ,t1.saleamt
-  ,t1.z_saleamt
-```
-
-1)group\_typeによってここの列は変化します。
-
-```sql
-    ,t1.sale_month
-    ,t1.sale_day
-```
-
-## privateメソッド(godsum\_years用)
-年ごとに集計し前年と比較、累計を求めるロジックは
-\_months,\_days,\_weeksとは異なるため別にしています。
-
-- select\_year\_sql
-  - set\_last\_select\_columns\_year
-- from\_year\_sql
-  - create\_outside\_table\_year
-    - set\_outside\_select\_columns\_year
-    - create\_base\_table\_year
-      - set\_base\_select\_columns\_year
-        - set\_base\_where\_columns\_year
-        - set\_base\_group\_columns\_year
-    - create\_base\_table\_year_z
-      - set\_base\_select\_columns\_year
-        - set\_base\_where\_columns\_year_z
-        - set\_base\_group\_columns\_year
-    - set\_base\_left\_outer\_join\_columns\_year
-- left\_outer\_year\_sql
-  - create\_outside\_table\_year
-  - set\_last\_outer\_join\_columns\_year
-    - set\_outside\_select\_columns\_year
-    - create\_base\_table\_year\_z
-      - set\_base\_select\_columns\_year
-        - set\_base\_where\_columns\_year
-        - set\_base\_group\_columns\_year
-    - create\_base\_table\_year_z
-      - set\_base\_select\_columns\_year
-        - set\_base\_where\_columns\_year_z
-        - set\_base\_group\_columns\_year
-- group\_year\_sql
-  - set\_last\_group\_columns\_year
-- order\_year\_sql
-  - set\_last\_order\_columns\_year
-
-## SQL
-仮想テーブルも含め5つのテーブルをつなぎ合わせています。
-
-| テーブル名 | 別名 | 説明|
-|---|---|---|
-| sale | t1 | 今年用の売上 |
-| sale | t2 | 前年用の売上 |
-| t1,t2 | t5 | 今年と前年を併せたテーブル |
-| t1,t2 | t6 | 同上(累計用)|
-| store | t7 | マスタテーブル |
-
-SQLは以下の通りです。
-
-```sql
-select
-  /* last_select */
-   t5.sale_year
-  ,t5.sale_id
-  ,t7.number
-  ,t7.name
-  ,t5.saleamt
-  ,t5.z_saleamt
-  ,sum(t6.saleamt) as r_saleamt
-  ,sum(t6.z_saleamt) as r_z_saleamt
-from (
-  /* t5 start */
-  select
-     t1.sale_year
-    ,t1.sale_id
-    ,t1.saleamt
-    ,t2.saleamt as z_saleamt
-  from (
-    /* t1 start */
-    select 
-       sales.sale_year
-      ,sales.sale_id
-      ,sum(sales.saleamt) as saleamt
-      ,(sales.sale_year + 1) as hiduke
-    from sales 
-    where 
-          sales.saledate between '開始日' and '終了日' 
-      and sales.sale_id in (Storeのid)
-    group by 
-      sales.sale_year
-     ,sales.sale_id
-    ) as t1
-    /* t1 end */
-    left outer join (
-    /* t2 start */
-    select 
-       sales.sale_year
-      ,sales.sale_id
-      ,sum(sales.saleamt) as saleamt
-      ,(sales.sale_year + 1) as hiduke
-    from sales 
-    where 
-          sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
-      and sales.sale_id in (Storeのid)
-    group by 
-       sales.sale_year
-      ,sales.sale_id
-    ) as t2 on
-    /* t2 end */
-  /* t1 t2 inner join start */
-      t1.sale_year = t2.hiduke
-  and t1.sale_id = t2.sale_id
-  /* t1 t2 inner join end */
-  /* t5 end */
-) as t5
- left outer join (
-   /* t6 start */
-   select
-      t1.sale_year
-     ,t1.sale_id
-     ,t1.saleamt
-     ,t2.saleamt as z_saleamt
-   from (
-     /* t1 start */
-     select 
-        sales.sale_year
-       ,sales.sale_id
-       ,sum(sales.saleamt) as saleamt
-       ,sales.sale_year as hiduke
-     from sales 
-     where 
-           sales.saledate between '開始日' and '終了日' 
-       and sales.sale_id in (Storeのid)
-     group by 
-        sales.sale_year
-       ,sales.sale_id
-     ) as t1
-     /* t1 end */
-     left outer join (
-     /* t2 start */
-     select 
-        sales.sale_year
-       ,sales.sale_id
-       ,sum(sales.saleamt) as saleamt
-       ,sales.sale_year + 1 as hiduke
-     from sales 
-     where 
-          sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
-      and sales.sale_id in (Storeのid)
-     group by 
-        sales.sale_year
-       ,sales.sale_id
-     /* t2 end */
-   ) as t2 on
-   /* t1 t2 inner join start */
-       t1.sale_year = t2.hiduke
-   and t1.sale_id = t2.sale_id
-   /* t1 t2 inner join end */
-   /* t6 end */
-) as t6 on
-  /* t5 t6 left outer join start */
-      t5.sale_year >= t6.sale_year
-  and t5.sale_id = t6.sale_id
-  /* t5 t6 inner join end */
-/* t7 inner join start */
-inner join stores as t7 on
-  t5.sale_id = t7.id
-/* t7 inner join end */
-group by
-  /* last_group */
-   t5.sale_year
-  ,t5.sale_id
-  ,t5.saleamt
-  ,t5.z_saleamt
-  ,t7.number
-  ,t7.name
-order by
-  /* last_order */
-   t7.number
-  ,t5.sale_year;
-```
-
-## 1) t1テーブル
-model\_id、年ごとに集計をします。
-このテーブルのhiduke列は特に意味はありません。
-
-```sql
-select 
-   sales.sale_year
-  ,sales.sale_id
-  ,sum(sales.saleamt) as saleamt
-  ,(sales.sale_year + 1) as hiduke
-from sales 
-where 
-      sales.saledate between '開始日' and '終了日' 
-  and sales.sale_id in (Storeのid)
-group by 
-  sales.sale_year
- ,sales.sale_id
-```
-
-## 2) t2テーブル
-t1と同じテーブルですがwhere句に1年前の期間を
-セットし前年用のデータを抽出します。
-hiduke列(sale\_year + 1)を追加しています。
-
-```sql
-select 
-   sales.sale_year
-  ,sales.sale_id
-  ,sum(sales.saleamt) as saleamt
-  ,sales.sale_year + 1 as hiduke
-from sales 
-where 
-      sales.saledate between '開始日 - 1年' and '終了日 - 1年' 
-  and sales.sale_id in (Storeのid)
-group by 
-   sales.sale_year
-  ,sales.sale_id
-```
-
-## 3) t5テーブル
-t1とt2をleft outer joinします。
-joinする際、t1.sale\_year = t2.hiduke(sale\_year + 1)と
-することでt1は今年の売上、t2は前年売上になります。
-
-```sql
-select
-   t1.sale_year
-  ,t1.sale_id
-  ,t1.saleamt
-  ,t2.saleamt as z_saleamt
-from (
-  /* t1 start */
-  /* t1 end */
-  left outer join (
-  /* t2 start */
-  /* t2 end */
-  on
-  /* t1 t2 inner join start */
-) as t5
-```
-
-## 4) t6テーブル
-累計用にt5と同じテーブルを用意しleft outer joinします。
-その際、t5.sale\_year >= t6.sale\_year とすることで
-今年よりも小さい行を積み重ねています。
-
-```sql
-left outer join (
-  select
-     t1.sale_year
-    ,t1.sale_id
-    ,t1.saleamt
-    ,t2.saleamt as z_saleamt
-  from (
-    /* t1 start */
-    /* t1 end */
-    left outer join (
-    /* t2 start */
-    /* t2 end */
-    on
-    /* t1 t2 inner join start */
-) as t6 on
-      t5.sale_year >= t6.sale_year
-  and t5.sale_id = t6.sale_id
-```
-
-## 5) t7テーブル
-マスタテーブルとt5をinner joinします。
-
-```sql
-inner join stores as t7 on t5.sale_id = t7.id
-```
-
-## 6) 仕上げ
-t5から今年と前年の売上、t6から累計用のデータを選択しsumします。
-t7から属性値を選択しています。
-t5,t7の列をgroup byして完成です。
-
-```sql
-select
-   t5.sale_year
-  ,t5.sale_id
-  ,t7.number
-  ,t7.name
-  ,t5.saleamt
-  ,t5.z_saleamt
-  ,sum(t6.saleamt) as r_saleamt
-  ,sum(t6.z_saleamt) as r_z_saleamt
-from (
-  /* t5 start */
-) as t5
- left outer join (
-   /* t6 start */
-) as t6 on
-  /* t5 t6 left outer join start */
-inner join store as t7 on
-  /* t7 inner join start */
-group by
-   t5.sale_year
-  ,t5.sale_id
-  ,t5.saleamt
-  ,t5.z_saleamt
-  ,t7.number
-  ,t7.name
-order by
-   t7.number
-  ,t5.sale_year;
-```
+| saleamt | r\_saleamt |
+|---|---|
+|  ・・・ | ・・・ |
+|  ・・・ | ・・・ |
