@@ -13,13 +13,12 @@ class GodsumModuleTest < ActiveSupport::TestCase
     #  -------------------------------
     # |sale_year | z_saleamt | saleamt|
     # |----------|-----------|--------|
-    # |2022      | nil       | 100    |
     # |2023      | 100       | 200    |
     # |2024      | 200       | 300    |
     #  -------------------------------
-    sale_year = [2022, 2023, 2024]
-    z_saleamt = [nil, 100, 200]
-    saleamt = [100, 200, 300]
+    sale_year = [2023, 2024]
+    z_saleamt = [100, 200]
+    saleamt = [200, 300]
 
     set_years
     line_sales = Line.godsum_years("2022-08-01", "2024-08-01", model: LineSale)
@@ -64,7 +63,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
 
   test "godsum_months z" do
     # 期待する値(@line)
-    # sale_month | z_saleamt | z_r_saleamt |
+    # sale_month | z_saleamt | r_z_saleamt |
     # -------------------------------------
     #  6         | 100       |   100       |
     #  7         | 200       |   300       |
@@ -72,7 +71,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     # -------------------------------------
     sale_month = [6, 7, 8]
     z_saleamt = [100, 200, 300]
-    z_r_saleamt = [100, 300, 600]
+    r_z_saleamt = [100, 300, 600]
 
     set_months
     line_sales = Line.godsum_months("2024-06-01", "2024-08-01", model: LineSale)
@@ -81,7 +80,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     line_sales.each_with_index do |line_sale, idx|
       assert_equal sale_month[idx], line_sale.sale_month
       assert_equal z_saleamt[idx], line_sale.z_saleamt
-      assert_equal z_r_saleamt[idx], line_sale.z_r_saleamt
+      assert_equal r_z_saleamt[idx], line_sale.r_z_saleamt
     end
   end
 
@@ -110,7 +109,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
 
   test "godsum_days z" do
     # 期待する値(@line)
-    # sale_month | sale_day | z_saleamt | z_r_saleamt|
+    # sale_month | sale_day | z_saleamt | r_z_saleamt|
     # -----------------------------------------------
     #     8      |    1     | 100       | 100        |
     #     8      |    2     | 100       | 200        |
@@ -118,7 +117,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     # -----------------------------------------------
     sale_days = [1, 2, 3]
     z_saleamt = 100
-    z_r_saleamt = [100, 200, 300]
+    r_z_saleamt = [100, 200, 300]
 
     set_days
     line_sales = Line.godsum_days("2024-08-01", "2024-08-03", model: LineSale)
@@ -127,7 +126,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     line_sales.each_with_index do |line_sale, idx|
       assert_equal sale_days[idx], line_sale.sale_day
       assert_equal z_saleamt, line_sale.z_saleamt
-      assert_equal z_r_saleamt[idx], line_sale.z_r_saleamt
+      assert_equal r_z_saleamt[idx], line_sale.r_z_saleamt
     end
   end
 
@@ -156,7 +155,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
 
   test "godsum_weeks z" do
     # 期待する値(@line)
-    # sale_cweek | z_saleamt | z_r_saleamt|
+    # sale_cweek | z_saleamt | r_z_saleamt|
     # ------------------------------------
     #     30     | 100       | 100        |
     #     31     | 100       | 200        |
@@ -164,7 +163,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     # ------------------------------------
     sale_cweeks = [30, 31, 32]
     z_saleamt = 100
-    z_r_saleamt = [100, 200, 300]
+    r_z_saleamt = [100, 200, 300]
 
     set_weeks
     line_sales = Line.godsum_weeks("2024-07-24", "2024-08-31", model: LineSale)
@@ -173,7 +172,7 @@ class GodsumModuleTest < ActiveSupport::TestCase
     line_sales.each_with_index do |line_sale, idx|
       assert_equal sale_cweeks[idx], line_sale.sale_cweek
       assert_equal z_saleamt, line_sale.z_saleamt
-      assert_equal z_r_saleamt[idx], line_sale.z_r_saleamt
+      assert_equal r_z_saleamt[idx], line_sale.r_z_saleamt
     end
   end
 

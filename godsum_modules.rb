@@ -1,3 +1,4 @@
+# Dept,Line,Cate,Itemをベースにする
 module GodsumModules
   extend ActiveSupport::Concern
   module ClassMethods
@@ -23,14 +24,14 @@ module GodsumModules
       sql.gsub!(%r{/\*.*?\*/}, "")
       sql = sql.split.join(" ")
 
-      # 分割
-      matches = /\Aselect (.*?) from (.*?) (left .*)\z/.match(sql)
+      ## 分割
+      matches = /\Aselect (.*?) from (.*)\z/.match(sql)
 
-      # SQL実行
-      select(matches[1]).from(matches[2]).joins(matches[3])
+      select(matches[1]).from(matches[2])
     end
 
     # 年別売上前年比較(単一部門用)
+    # (inner joinしているのでstartdayの年は表示されない)
     # options
     #   model:       売上を管理してるテーブルを指定
     #   sum_columns: 集計したい列を配列で指定
@@ -86,7 +87,7 @@ module GodsumModules
       var_columns = [["master columns", master_columns],
                      ["FINAL_SUM_COLUMNS", final_sum_columns],
                      ["Z_SUM_COLUMNS", z_sum_columns],
-                     ["Z_R_SUM_COLUMNS", z_r_sum_columns],
+                     ["R_Z_SUM_COLUMNS", r_z_sum_columns],
                      ["SUM_COLUMNS", sum_columns(child)],
                      ["T6_SUM_COLUMNS", t6_sum_columns],
                      ["T7_SUM_COLUMNS", t7_sum_columns],
@@ -101,10 +102,12 @@ module GodsumModules
     #   model:       売上を管理してるテーブルを指定
     #   sum_columns: 集計したい列を配列で指定
     def godsum_days(startday, lastday, **options)
+      # SQL取得
+      sql = days_sql
+
       # 変数をセット
       child = has_many_table(options[:model])
-
-      sql = days_sql
+      @sum_columns = options[:sum_columns] || SUM_COLUMNS
 
       # 定数変換テーブル
       columns = [["PARENT", table_name],
@@ -122,7 +125,7 @@ module GodsumModules
       var_columns = [["master columns", master_columns],
                      ["FINAL_SUM_COLUMNS", final_sum_columns],
                      ["Z_SUM_COLUMNS", z_sum_columns],
-                     ["Z_R_SUM_COLUMNS", z_r_sum_columns],
+                     ["R_Z_SUM_COLUMNS", r_z_sum_columns],
                      ["SUM_COLUMNS", sum_columns(child)],
                      ["T6_SUM_COLUMNS", t6_sum_columns],
                      ["T7_SUM_COLUMNS", t7_sum_columns],
@@ -163,7 +166,7 @@ module GodsumModules
       var_columns = [["master columns", master_columns],
                      ["FINAL_SUM_COLUMNS", final_sum_columns],
                      ["Z_SUM_COLUMNS", z_sum_columns],
-                     ["Z_R_SUM_COLUMNS", z_r_sum_columns],
+                     ["R_Z_SUM_COLUMNS", r_z_sum_columns],
                      ["SUM_COLUMNS", sum_columns(child)],
                      ["T6_SUM_COLUMNS", t6_sum_columns],
                      ["T7_SUM_COLUMNS", t7_sum_columns],
@@ -274,9 +277,8 @@ module GodsumModules
     end
 
     def month_t1_columns
-      # testが失敗する場合がある
       @sum_columns.map do |column|
-        %W[t1.z_#{column} t1.z_r_#{column}]
+        %W[t1.z_#{column} t1.r_z_#{column}]
       end.flatten
     end
 
@@ -296,9 +298,9 @@ module GodsumModules
       end).join(",")
     end
 
-    def z_r_sum_columns
+    def r_z_sum_columns
       ([""] + @sum_columns.map do |column|
-        "sum(t5.#{column}) as z_r_#{column}"
+        "sum(t5.#{column}) as r_z_#{column}"
       end).join(",")
     end
 
@@ -329,7 +331,7 @@ module GodsumModules
     def grand_sum_columns(child, startday, lastday)
       @sum_columns.map do |column|
         ["sum(case when #{child}.#{SALEDATE} between '#{startday.to_date - 1.year}' and '#{lastday.to_date - 1.year}' then #{child}.#{column} else 0 end) as z_#{column}",
-         "sum(case when #{child}.#{SALEDATE} between '#{startday.to_date - 1.year}' and '#{lastday.to_date - 1.year}' then #{child}.#{column} else 0 end) as #{column}"]
+         "sum(case when #{child}.#{SALEDATE} between '#{startday.to_date}' and '#{lastday.to_date}' then #{child}.#{column} else 0 end) as #{column}"]
       end.join(",").squish
     end
 
@@ -369,7 +371,7 @@ module GodsumModules
              CHILD.SALE_YEAR
             ,CHILD.CHILD_ID
         ) as t1
-        left outer join (
+        inner join (
            select
               CHILD.CHILD_ID
              ,CHILD.SALE_YEAR
@@ -402,7 +404,7 @@ module GodsumModules
           ,t1.SALE_MONTH
           /* FINAL_SUM_COLUMNS start */
           ,t1.z_saleamt
-          ,t1.z_r_saleamt
+          ,t1.r_z_saleamt
           ,t2.saleamt
           ,t2.r_saleamt
           /* end */
@@ -414,8 +416,8 @@ module GodsumModules
             /* Z_SUM_COLUMNS start */
             ,t4.saleamt as z_saleamt
             /* end */
-            /* Z_R_SUM_COLUMNS start */
-            ,sum(t5.saleamt) as z_r_saleamt
+            /* R_Z_SUM_COLUMNS start */
+            ,sum(t5.saleamt) as r_z_saleamt
             /* end */
           from (
             /* 日付テーブル*/
@@ -551,7 +553,7 @@ module GodsumModules
           ,t1.SALE_DAY
           /* FINAL_SUM_COLUMNS start */
           ,t1.z_saleamt
-          ,t1.z_r_saleamt
+          ,t1.r_z_saleamt
           ,t2.saleamt
           ,t2.r_saleamt
           /* end */
@@ -564,8 +566,8 @@ module GodsumModules
             /* Z_SUM_COLUMNS start */
             ,t4.saleamt as z_saleamt
             /* end */
-            /* Z_R_SUM_COLUMNS start */
-            ,sum(t5.saleamt) as z_r_saleamt
+            /* R_Z_SUM_COLUMNS start */
+            ,sum(t5.saleamt) as r_z_saleamt
             /* end */
           from (
             /* 日付テーブル*/
@@ -717,7 +719,7 @@ module GodsumModules
           ,t1.SALE_CWEEK
           /* FINAL_SUM_COLUMNS start */
           ,t1.z_saleamt
-          ,t1.z_r_saleamt
+          ,t1.r_z_saleamt
           ,t2.saleamt
           ,t2.r_saleamt
           /* end */
@@ -729,8 +731,8 @@ module GodsumModules
             /* Z_SUM_COLUMNS start */
             ,t4.saleamt as z_saleamt
             /* end */
-            /* Z_R_SUM_COLUMNS start */
-            ,sum(t5.saleamt) as z_r_saleamt
+            /* R_Z_SUM_COLUMNS start */
+            ,sum(t5.saleamt) as r_z_saleamt
             /* end */
           from (
             /* 日付テーブル*/
